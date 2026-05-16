@@ -1,0 +1,15 @@
+{
+  "name": "splitshow",
+  "version": "1.0.0",
+  "description": "3-column random media slideshow served locally",
+  "bin": {
+    "splitshow": "./bin/splitshow.js"
+  },
+  "scripts": {
+    "start": "node bin/splitshow.js"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "express": "^4.19.2"
+  }
+}

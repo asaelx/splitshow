@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>splitshow</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #stage {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    .col {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .col + .col {
+      border-left: 1px solid #111;
+    }
+
+    .col img,
+    .col video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+    }
+
+    /* Controls */
+    #controls {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .ctrl-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      border: none;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .ctrl-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .ctrl-btn img {
+      width: 20px;
+      height: 20px;
+      display: block;
+      filter: invert(1);
+    }
+
+    #yt-player {
+      position: fixed;
+      top: -9999px;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+    }
+
+    #empty {
+      color: #888;
+      font-family: monospace;
+      font-size: 1rem;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div class="col" id="col-0"></div>
+    <div class="col" id="col-1"></div>
+    <div class="col" id="col-2"></div>
+  </div>
+
+  <div id="yt-player"></div>
+
+  <div id="controls">
+    <button class="ctrl-btn" id="btn-playpause" aria-label="Play">
+      <img id="icon-playpause" src="/icons/play.svg" alt="Play">
+    </button>
+  </div>
+
+  <script>
+    // ── YouTube background music ──────────────────────────────────────────────
+
+    let ytPlayer = null;
+    let ytReady = false;
+
+    function initYouTube(videoId) {
+      if (!videoId) return;
+      window.onYouTubeIframeAPIReady = function () {
+        ytPlayer = new YT.Player('yt-player', {
+          videoId,
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            loop: 1,
+            playlist: videoId,
+            disablekb: 1,
+            fs: 0,
+            iv_load_policy: 3,
+            modestbranding: 1,
+          },
+          events: {
+            onReady: () => { ytReady = true; },
+          },
+        });
+      };
+      const ytScript = document.createElement('script');
+      ytScript.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(ytScript);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    let media = [];
+    let imageDuration = 3;
+    let isPaused = true;
+
+    const activeItems = [null, null, null];
+
+    const colState = [0, 1, 2].map(i => ({
+      index: i,
+      el: document.getElementById(`col-${i}`),
+      timer: null,
+      timerSetAt: null,
+      timerRemaining: null,
+    }));
+
+    // ── Media helpers ────────────────────────────────────────────────────────
+
+    function pickRandom(colIndex) {
+      if (media.length === 0) return null;
+      if (media.length <= 3) return media[Math.floor(Math.random() * media.length)];
+      const others = activeItems.filter((_, i) => i !== colIndex);
+      const pool = media.filter(m => !others.includes(m));
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    // ── Column rendering ─────────────────────────────────────────────────────
+
+    function scheduleImageAdvance(state, delay) {
+      state.timerSetAt = Date.now();
+      state.timerRemaining = delay;
+      state.timer = setTimeout(() => {
+        state.timer = null;
+        state.timerSetAt = null;
+        state.timerRemaining = null;
+        playInCol(state);
+      }, delay);
+    }
+
+    function loadItem(state, item) {
+      if (state.timer) {
+        clearTimeout(state.timer);
+        state.timer = null;
+        state.timerSetAt = null;
+        state.timerRemaining = null;
+      }
+
+      activeItems[state.index] = item;
+      state.el.innerHTML = '';
+
+      if (item.type === 'image') {
+        const img = document.createElement('img');
+        img.src = `/media/${encodeURIComponent(item.name)}`;
+        img.addEventListener('error', () => playInCol(state));
+        state.el.appendChild(img);
+        if (!isPaused) {
+          scheduleImageAdvance(state, imageDuration * 1000);
+        } else {
+          state.timerRemaining = imageDuration * 1000;
+        }
+      } else {
+        const video = document.createElement('video');
+        video.src = `/media/${encodeURIComponent(item.name)}`;
+        video.muted = true;
+        video.playsInline = true;
+        video.addEventListener('ended', () => playInCol(state));
+        video.addEventListener('error', () => playInCol(state));
+        state.el.appendChild(video);
+        if (!isPaused) {
+          video.play().catch(() => {
+            setTimeout(() => { if (video.paused) playInCol(state); }, 500);
+          });
+        }
+      }
+    }
+
+    // Random next item for a single column (used during normal independent playback)
+    function playInCol(state) {
+      const item = pickRandom(state.index);
+      if (item) loadItem(state, item);
+    }
+
+    // ── Play / Pause ─────────────────────────────────────────────────────────
+
+    function pauseAll() {
+      isPaused = true;
+      colState.forEach(state => {
+        const video = state.el.querySelector('video');
+        if (video) {
+          video.pause();
+        } else if (state.timer) {
+          const elapsed = Date.now() - state.timerSetAt;
+          state.timerRemaining = Math.max(0, state.timerRemaining - elapsed);
+          clearTimeout(state.timer);
+          state.timer = null;
+          state.timerSetAt = null;
+        }
+      });
+      if (ytReady) ytPlayer.pauseVideo();
+    }
+
+    function resumeAll() {
+      isPaused = false;
+      colState.forEach(state => {
+        const video = state.el.querySelector('video');
+        if (video) {
+          video.play().catch(() => {});
+        } else if (state.timerRemaining != null) {
+          scheduleImageAdvance(state, state.timerRemaining);
+        }
+      });
+      if (ytReady) ytPlayer.playVideo();
+    }
+
+    function updatePlayPauseIcon() {
+      const icon = document.getElementById('icon-playpause');
+      const btn = document.getElementById('btn-playpause');
+      icon.src = isPaused ? '/icons/play.svg' : '/icons/pause.svg';
+      icon.alt = isPaused ? 'Play' : 'Pause';
+      btn.setAttribute('aria-label', isPaused ? 'Play' : 'Pause');
+    }
+
+    function togglePlayPause() {
+      isPaused ? resumeAll() : pauseAll();
+      updatePlayPauseIcon();
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+
+    document.getElementById('btn-playpause').addEventListener('click', togglePlayPause);
+
+    colState.forEach(state => {
+      state.el.addEventListener('click', () => playInCol(state));
+    });
+
+    async function init() {
+      const res = await fetch('/api/media');
+      const data = await res.json();
+      media = data.media;
+      imageDuration = data.imageDuration;
+
+      initYouTube(data.musicId);
+
+      if (media.length === 0) {
+        document.getElementById('stage').innerHTML =
+          '<div id="empty">No images or videos found in the specified folder.</div>';
+        return;
+      }
+
+      // Load first item into each column (paused)
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => playInCol(colState[i]), i * 120);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
