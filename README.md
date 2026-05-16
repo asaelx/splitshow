@@ -26,7 +26,7 @@ Each column plays media independently — videos run to the end, images hold for
 Clone the repository and install globally:
 
 ```bash
-git clone https://github.com/your-username/splitshow.git
+git clone https://github.com/asaelx/splitshow.git
 cd splitshow
 npm install
 npm install -g .
