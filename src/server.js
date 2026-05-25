@@ -2,6 +2,16 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
+const os = require('os');
+
+function getLocalIP() {
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const iface of ifaces) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+    }
+  }
+  return null;
+}
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif']);
 const VIDEO_EXTS = new Set(['.mp4', '.webm', '.ogv', '.m4v', '.mov']);
@@ -70,8 +80,9 @@ async function startServer({ mediaDir, imageDuration, preferredPort, musicUrl })
   const port = await findPort(preferredPort);
 
   const server = app.listen(port, () => {
-    const url = `http://localhost:${port}`;
-    console.log(`splitshow  →  ${url}`);
+    const localIP = getLocalIP();
+    console.log(`splitshow  →  http://localhost:${port}`);
+    if (localIP) console.log(`           →  http://${localIP}:${port}`);
     console.log(`media dir  →  ${mediaDir}`);
     if (port !== preferredPort) {
       console.log(`(port ${preferredPort} was busy, using ${port})`);

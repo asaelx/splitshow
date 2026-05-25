@@ -78,6 +78,13 @@
       filter: invert(1);
     }
 
+    #fullscreen-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10;
+    }
+
     #yt-player {
       position: fixed;
       top: -9999px;
@@ -114,6 +121,10 @@
       <img id="icon-playpause" src="/icons/play.svg" alt="Play">
     </button>
   </div>
+
+  <button class="ctrl-btn" id="fullscreen-btn" aria-label="Enter fullscreen">
+    <img id="icon-fullscreen" src="/icons/maximize.svg" alt="Enter fullscreen">
+  </button>
 
   <script>
     // ── YouTube background music ──────────────────────────────────────────────
@@ -276,6 +287,26 @@
     // ── Init ─────────────────────────────────────────────────────────────────
 
     document.getElementById('btn-playpause').addEventListener('click', togglePlayPause);
+
+    const fsBtn = document.getElementById('fullscreen-btn');
+    const fsIcon = document.getElementById('icon-fullscreen');
+
+    function updateFullscreenIcon() {
+      const isFs = !!document.fullscreenElement;
+      fsIcon.src = isFs ? '/icons/minimize.svg' : '/icons/maximize.svg';
+      fsIcon.alt = isFs ? 'Exit fullscreen' : 'Enter fullscreen';
+      fsBtn.setAttribute('aria-label', isFs ? 'Exit fullscreen' : 'Enter fullscreen');
+    }
+
+    fsBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', updateFullscreenIcon);
 
     colState.forEach(state => {
       state.el.addEventListener('click', () => playInCol(state));
