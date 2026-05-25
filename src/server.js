@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const net = require('net');
 const os = require('os');
-const selfsigned = require('selfsigned');
+const { execFileSync } = require('child_process');
 
 function getLocalIP() {
   for (const ifaces of Object.values(os.networkInterfaces())) {
@@ -16,17 +16,43 @@ function getLocalIP() {
 }
 
 function generateCert(localIP) {
-  const altNames = [
-    { type: 2, value: 'localhost' },
-    { type: 7, ip: '127.0.0.1' },
-  ];
-  if (localIP) altNames.push({ type: 7, ip: localIP });
-  const pems = selfsigned.generate([{ name: 'commonName', value: 'splitshow' }], {
-    days: 365,
-    keySize: 2048,
-    extensions: [{ name: 'subjectAltName', altNames }],
-  });
-  return { cert: pems.cert, key: pems.private };
+  const sanList = ['DNS:localhost', 'IP:127.0.0.1'];
+  if (localIP) sanList.push(`IP:${localIP}`);
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'splitshow-'));
+  try {
+    const keyFile = path.join(tmpDir, 'key.pem');
+    const certFile = path.join(tmpDir, 'cert.pem');
+    const cfgFile = path.join(tmpDir, 'san.cnf');
+
+    fs.writeFileSync(cfgFile, [
+      '[req]',
+      'distinguished_name = req_distinguished_name',
+      'req_extensions = v3_req',
+      'prompt = no',
+      '[req_distinguished_name]',
+      'CN = splitshow',
+      '[v3_req]',
+      'subjectAltName = ' + sanList.join(','),
+      'basicConstraints = CA:FALSE',
+      'keyUsage = digitalSignature, keyEncipherment',
+      'extendedKeyUsage = serverAuth',
+    ].join('\n'));
+
+    execFileSync('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048',
+      '-keyout', keyFile, '-out', certFile,
+      '-days', '365', '-nodes',
+      '-config', cfgFile, '-extensions', 'v3_req',
+    ], { stdio: 'pipe' });
+
+    return {
+      key: fs.readFileSync(keyFile, 'utf8'),
+      cert: fs.readFileSync(certFile, 'utf8'),
+    };
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif']);
