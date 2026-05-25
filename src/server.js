@@ -23,6 +23,7 @@ function generateCert(localIP) {
   if (localIP) altNames.push({ type: 7, ip: localIP });
   const pems = selfsigned.generate([{ name: 'commonName', value: 'splitshow' }], {
     days: 365,
+    keySize: 2048,
     extensions: [{ name: 'subjectAltName', altNames }],
   });
   return { cert: pems.cert, key: pems.private };
