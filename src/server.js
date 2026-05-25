@@ -1,10 +1,8 @@
 const express = require('express');
-const https = require('https');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
 const os = require('os');
-const { execFileSync } = require('child_process');
 
 function getLocalIP() {
   for (const ifaces of Object.values(os.networkInterfaces())) {
@@ -13,46 +11,6 @@ function getLocalIP() {
     }
   }
   return null;
-}
-
-function generateCert(localIP) {
-  const sanList = ['DNS:localhost', 'IP:127.0.0.1'];
-  if (localIP) sanList.push(`IP:${localIP}`);
-
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'splitshow-'));
-  try {
-    const keyFile = path.join(tmpDir, 'key.pem');
-    const certFile = path.join(tmpDir, 'cert.pem');
-    const cfgFile = path.join(tmpDir, 'san.cnf');
-
-    fs.writeFileSync(cfgFile, [
-      '[req]',
-      'distinguished_name = req_distinguished_name',
-      'req_extensions = v3_req',
-      'prompt = no',
-      '[req_distinguished_name]',
-      'CN = splitshow',
-      '[v3_req]',
-      'subjectAltName = ' + sanList.join(','),
-      'basicConstraints = CA:FALSE',
-      'keyUsage = digitalSignature, keyEncipherment',
-      'extendedKeyUsage = serverAuth',
-    ].join('\n'));
-
-    execFileSync('openssl', [
-      'req', '-x509', '-newkey', 'rsa:2048',
-      '-keyout', keyFile, '-out', certFile,
-      '-days', '365', '-nodes',
-      '-config', cfgFile, '-extensions', 'v3_req',
-    ], { stdio: 'pipe' });
-
-    return {
-      key: fs.readFileSync(keyFile, 'utf8'),
-      cert: fs.readFileSync(certFile, 'utf8'),
-    };
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
 }
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif']);
@@ -120,14 +78,12 @@ async function startServer({ mediaDir, imageDuration, preferredPort, musicUrl })
   app.use(express.static(path.join(__dirname, 'public')));
 
   const port = await findPort(preferredPort);
-  const localIP = getLocalIP();
-  const { cert, key } = generateCert(localIP);
 
-  const server = https.createServer({ cert, key }, app).listen(port, () => {
-    console.log(`splitshow  →  https://localhost:${port}`);
-    if (localIP) console.log(`           →  https://${localIP}:${port}`);
+  const server = app.listen(port, () => {
+    const localIP = getLocalIP();
+    console.log(`splitshow  →  http://localhost:${port}`);
+    if (localIP) console.log(`           →  http://${localIP}:${port}`);
     console.log(`media dir  →  ${mediaDir}`);
-    if (localIP) console.log(`(first LAN visit: accept the self-signed cert in your browser)`);
     if (port !== preferredPort) {
       console.log(`(port ${preferredPort} was busy, using ${port})`);
     }
