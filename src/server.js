@@ -1,8 +1,10 @@
 const express = require('express');
+const https = require('https');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
 const os = require('os');
+const selfsigned = require('selfsigned');
 
 function getLocalIP() {
   for (const ifaces of Object.values(os.networkInterfaces())) {
@@ -11,6 +13,19 @@ function getLocalIP() {
     }
   }
   return null;
+}
+
+function generateCert(localIP) {
+  const altNames = [
+    { type: 2, value: 'localhost' },
+    { type: 7, ip: '127.0.0.1' },
+  ];
+  if (localIP) altNames.push({ type: 7, ip: localIP });
+  const pems = selfsigned.generate([{ name: 'commonName', value: 'splitshow' }], {
+    days: 365,
+    extensions: [{ name: 'subjectAltName', altNames }],
+  });
+  return { cert: pems.cert, key: pems.private };
 }
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif']);
@@ -78,12 +93,14 @@ async function startServer({ mediaDir, imageDuration, preferredPort, musicUrl })
   app.use(express.static(path.join(__dirname, 'public')));
 
   const port = await findPort(preferredPort);
+  const localIP = getLocalIP();
+  const { cert, key } = generateCert(localIP);
 
-  const server = app.listen(port, () => {
-    const localIP = getLocalIP();
-    console.log(`splitshow  →  http://localhost:${port}`);
-    if (localIP) console.log(`           →  http://${localIP}:${port}`);
+  const server = https.createServer({ cert, key }, app).listen(port, () => {
+    console.log(`splitshow  →  https://localhost:${port}`);
+    if (localIP) console.log(`           →  https://${localIP}:${port}`);
     console.log(`media dir  →  ${mediaDir}`);
+    if (localIP) console.log(`(first LAN visit: accept the self-signed cert in your browser)`);
     if (port !== preferredPort) {
       console.log(`(port ${preferredPort} was busy, using ${port})`);
     }
