@@ -152,6 +152,15 @@
             onReady: () => { ytReady = true; },
           },
         });
+        // onReady fires via postMessage from YouTube. When accessed over a LAN IP
+        // that postMessage is blocked by the browser, so onReady never fires.
+        // Fall back after 3 s: play/pause commands (parent→YouTube) still work.
+        setTimeout(() => {
+          if (!ytReady && ytPlayer) {
+            ytReady = true;
+            if (!isPaused) ytPlayer.playVideo();
+          }
+        }, 3000);
       };
       const ytScript = document.createElement('script');
       ytScript.src = 'https://www.youtube.com/iframe_api';
