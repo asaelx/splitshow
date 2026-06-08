@@ -105,6 +105,58 @@
       text-align: center;
       line-height: 1.8;
     }
+
+    @keyframes scroll-title {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(var(--scroll-dist)); }
+    }
+
+    #music-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 10;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #fff;
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
+
+    #music-bar img {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      filter: invert(1);
+      opacity: 0.85;
+    }
+
+    #music-title-wrap {
+      overflow: hidden;
+      max-width: 260px;
+    }
+
+    #music-title {
+      white-space: nowrap;
+      opacity: 0.9;
+      display: inline-block;
+    }
+
+    #music-title.scrolling {
+      animation: scroll-title linear infinite;
+    }
+
+    #music-time {
+      flex-shrink: 0;
+      opacity: 0.6;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -126,6 +178,12 @@
     <img id="icon-fullscreen" src="/icons/maximize.svg" alt="Enter fullscreen">
   </button>
 
+  <div id="music-bar">
+    <img src="/icons/music.svg" alt="music">
+    <div id="music-title-wrap"><span id="music-title"></span></div>
+    <span id="music-time">0:00 / 0:00</span>
+  </div>
+
   <script>
     // ── Background music ──────────────────────────────────────────────────────
 
@@ -133,17 +191,52 @@
     let ytReady = false;
     let audioEl = null;
 
+    const musicBar  = document.getElementById('music-bar');
+    const musicTitle = document.getElementById('music-title');
+    const musicTime  = document.getElementById('music-time');
+
+    function fmtTime(s) {
+      if (!isFinite(s) || isNaN(s)) return '0:00';
+      const m = Math.floor(s / 60);
+      return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    }
+
+    const musicTitleWrap = document.getElementById('music-title-wrap');
+
+    function setTrack(filename) {
+      audioEl.src = `/music/${encodeURIComponent(filename)}`;
+      musicTitle.textContent = filename.replace(/\.[^.]+$/, '');
+      musicTime.textContent = '0:00 / 0:00';
+      musicTitle.classList.remove('scrolling');
+      musicTitle.style.removeProperty('--scroll-dist');
+      musicTitle.style.removeProperty('animation-duration');
+      requestAnimationFrame(() => {
+        const overflow = musicTitle.scrollWidth - musicTitleWrap.clientWidth;
+        if (overflow > 0) {
+          const duration = 2 + overflow / 40;
+          musicTitle.style.setProperty('--scroll-dist', `-${overflow + 16}px`);
+          musicTitle.style.animationDuration = `${duration}s`;
+          musicTitle.style.animationDelay = '1.5s';
+          musicTitle.classList.add('scrolling');
+        }
+      });
+    }
+
     function initLocalMusic(tracks) {
       if (!tracks || tracks.length === 0) return;
       function pickTrack() {
         return tracks[Math.floor(Math.random() * tracks.length)];
       }
       audioEl = document.createElement('audio');
-      audioEl.src = `/music/${encodeURIComponent(pickTrack())}`;
+      audioEl.addEventListener('timeupdate', () => {
+        musicTime.textContent = `${fmtTime(audioEl.currentTime)} / ${fmtTime(audioEl.duration)}`;
+      });
       audioEl.addEventListener('ended', () => {
-        audioEl.src = `/music/${encodeURIComponent(pickTrack())}`;
+        setTrack(pickTrack());
         if (!isPaused) audioEl.play().catch(() => {});
       });
+      setTrack(pickTrack());
+      musicBar.style.display = 'flex';
     }
 
     function initYouTube(videoId) {
