@@ -127,10 +127,24 @@
   </button>
 
   <script>
-    // ── YouTube background music ──────────────────────────────────────────────
+    // ── Background music ──────────────────────────────────────────────────────
 
     let ytPlayer = null;
     let ytReady = false;
+    let audioEl = null;
+
+    function initLocalMusic(tracks) {
+      if (!tracks || tracks.length === 0) return;
+      function pickTrack() {
+        return tracks[Math.floor(Math.random() * tracks.length)];
+      }
+      audioEl = document.createElement('audio');
+      audioEl.src = `/music/${encodeURIComponent(pickTrack())}`;
+      audioEl.addEventListener('ended', () => {
+        audioEl.src = `/music/${encodeURIComponent(pickTrack())}`;
+        if (!isPaused) audioEl.play().catch(() => {});
+      });
+    }
 
     function initYouTube(videoId) {
       if (!videoId) return;
@@ -256,6 +270,7 @@
         }
       });
       if (ytReady) ytPlayer.pauseVideo();
+      if (audioEl) audioEl.pause();
     }
 
     function resumeAll() {
@@ -269,6 +284,7 @@
         }
       });
       if (ytReady) ytPlayer.playVideo();
+      if (audioEl) audioEl.play().catch(() => {});
     }
 
     function updatePlayPauseIcon() {
@@ -318,7 +334,11 @@
       media = data.media;
       imageDuration = data.imageDuration;
 
-      initYouTube(data.musicId);
+      if (data.musicTracks && data.musicTracks.length > 0) {
+        initLocalMusic(data.musicTracks);
+      } else {
+        initYouTube(data.musicId);
+      }
 
       if (media.length === 0) {
         document.getElementById('stage').innerHTML =

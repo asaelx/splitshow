@@ -15,6 +15,7 @@ function getLocalIP() {
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif']);
 const VIDEO_EXTS = new Set(['.mp4', '.webm', '.ogv', '.m4v', '.mov']);
+const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.aac', '.ogg', '.flac', '.wav', '.opus']);
 
 function parseYouTubeId(url) {
   if (!url) return null;
@@ -46,6 +47,20 @@ function scanMedia(dir) {
     }));
 }
 
+const MUSIC_DIR = path.join(__dirname, '..', 'music');
+
+function scanMusic() {
+  let entries;
+  try {
+    entries = fs.readdirSync(MUSIC_DIR);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter(f => AUDIO_EXTS.has(path.extname(f).toLowerCase()))
+    .map(f => f);
+}
+
 function isPortFree(port) {
   return new Promise(resolve => {
     const srv = net.createServer();
@@ -71,9 +86,10 @@ async function startServer({ mediaDir, imageDuration, preferredPort, musicUrl })
   }
 
   app.get('/api/media', (_req, res) => {
-    res.json({ media: scanMedia(mediaDir), imageDuration, musicId });
+    res.json({ media: scanMedia(mediaDir), imageDuration, musicId, musicTracks: scanMusic() });
   });
 
+  app.use('/music', express.static(MUSIC_DIR));
   app.use('/media', express.static(mediaDir));
   app.use(express.static(path.join(__dirname, 'public')));
 
