@@ -106,13 +106,16 @@
   cursor: default;
 }
 
-.splitshow-queue-status:not(:empty) {
+.splitshow-queue-status {
   position: absolute;
   right: 12px;
   bottom: 58px;
-  padding: 4px 7px;
   border-radius: 5px;
   background: #101116e8;
   font: 12px system-ui, sans-serif;
   pointer-events: none;
+}
+
+.splitshow-queue-status:not(:empty) {
+  padding: 4px 7px;
 }
