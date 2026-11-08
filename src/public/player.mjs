@@ -55,12 +55,14 @@ export function mountPlayer(root, items, {
     tile.media = undefined;
   }
 
-  function advance(tile) {
-    const available = pool.filter(item => !failed.has(item) &&
-      !tiles.some(other => other !== tile && other.item === item));
-    const choices = available.filter(item => item !== tile.item);
-    const candidates = choices.length ? choices : available;
-    show(tile, candidates[Math.floor(Math.random() * candidates.length)]);
+  function advance(tile, manual = false) {
+    const available = pool.filter(item => !failed.has(item));
+    const alternatives = available.filter(item => item !== tile.item);
+    const unused = alternatives.filter(item => !tiles.some(other => other.item === item));
+    const canReplay = available.includes(tile.item);
+    const candidates = unused.length ? unused : canReplay && !manual ? [tile.item] : alternatives;
+    const next = candidates[Math.floor(Math.random() * candidates.length)];
+    show(tile, next ?? (canReplay ? tile.item : undefined));
   }
 
   function resumeTile(tile) {
@@ -79,11 +81,12 @@ export function mountPlayer(root, items, {
     tile.ready = false;
     tile.remaining = imageDuration * 1000;
     tile.button.replaceChildren();
-    tile.button.disabled = !item;
     if (!item) {
-      tile.button.textContent = 'No playable media';
+      tile.button.textContent = 'No playable media · Retry';
+      tile.button.setAttribute('aria-label', 'Retry media in this tile');
       return;
     }
+    tile.button.setAttribute('aria-label', 'Skip this tile');
     const video = item.type === 'video';
     const media = document.createElement(video ? 'video' : 'img');
     tile.media = media;
@@ -163,7 +166,10 @@ export function mountPlayer(root, items, {
   setPaused(paused);
 
   for (const tile of tiles) {
-    listen(tile.button, 'click', () => advance(tile));
+    listen(tile.button, 'click', () => {
+      if (!tile.item && failed.size === pool.length) failed.clear();
+      advance(tile, true);
+    });
     show(tile, tile.item);
   }
 
