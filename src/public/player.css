@@ -119,3 +119,14 @@
 .splitshow-queue-status:not(:empty) {
   padding: 4px 7px;
 }
+
+.splitshow-progress {
+  position: absolute;
+  z-index: 4;
+  inset: 0 0 auto;
+  height: 3px;
+  background: #a855f7;
+  transform: scaleX(0);
+  transform-origin: left;
+  pointer-events: none;
+}

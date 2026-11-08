@@ -23,7 +23,10 @@ export function mountPlayer(root, items, {
     button.setAttribute('aria-label', 'Skip this tile');
     const pane = document.createElement('div');
     pane.className = 'splitshow-pane';
-    pane.append(button);
+    const progress = document.createElement('span');
+    progress.className = 'splitshow-progress';
+    progress.setAttribute('aria-hidden', 'true');
+    pane.append(button, progress);
     grid.append(pane);
     const trash = document.createElement('button');
     trash.type = 'button';
@@ -38,7 +41,7 @@ export function mountPlayer(root, items, {
     status.className = 'splitshow-queue-status';
     status.setAttribute('role', 'status');
     if (onQueueRemoval) pane.append(trash, status);
-    return { button, trash, status, item };
+    return { button, trash, status, progress, item };
   });
   if (!tiles.length) grid.textContent = 'No playable media found.';
 
@@ -70,6 +73,8 @@ export function mountPlayer(root, items, {
 
   function stopTile(tile) {
     setQueueStatus(tile);
+    cancelAnimationFrame(tile.progressFrame);
+    tile.progress.style.transform = 'scaleX(0)';
     clearTimeout(tile.timer);
     tile.timer = undefined;
     tile.loading?.abort();
@@ -92,6 +97,24 @@ export function mountPlayer(root, items, {
     show(tile, next ?? (canReplay ? tile.item : undefined));
   }
 
+  function updateProgress(tile) {
+    const media = tile.media;
+    let fraction;
+    if (media instanceof HTMLVideoElement) {
+      fraction = media.currentTime / media.duration;
+    } else {
+      const elapsed = tile.timer === undefined ? 0 : performance.now() - tile.started;
+      fraction = 1 - (tile.remaining - elapsed) / (imageDuration * 1000);
+    }
+    const progress = Number.isFinite(fraction) ? Math.max(0, Math.min(1, fraction)) : 0;
+    tile.progress.style.transform = `scaleX(${progress})`;
+  }
+
+  function animateProgress(tile) {
+    updateProgress(tile);
+    tile.progressFrame = requestAnimationFrame(() => animateProgress(tile));
+  }
+
   function resumeTile(tile) {
     if (!tile.ready || !tile.media || paused) return;
     if (tile.media instanceof HTMLVideoElement) {
@@ -100,6 +123,8 @@ export function mountPlayer(root, items, {
       tile.started = performance.now();
       tile.timer = setTimeout(() => advance(tile), tile.remaining);
     }
+    cancelAnimationFrame(tile.progressFrame);
+    animateProgress(tile);
   }
 
   function show(tile, item, url = item?.url, fallback = false) {
@@ -139,6 +164,9 @@ export function mountPlayer(root, items, {
       if (!fallback && item.fallback) {
         const loading = new AbortController();
         tile.loading = loading;
+        cancelAnimationFrame(tile.progressFrame);
+        tile.progress.style.transform = 'scaleX(0)';
+        tile.ready = false;
         tile.button.textContent = 'Preparing compatible media…';
         try {
           const compatible = await item.fallback(loading.signal);
@@ -161,12 +189,16 @@ export function mountPlayer(root, items, {
     for (const tile of tiles) {
       if (!paused) {
         resumeTile(tile);
-      } else if (tile.media instanceof HTMLVideoElement) {
-        tile.media.pause();
-      } else if (tile.timer !== undefined) {
-        clearTimeout(tile.timer);
-        tile.timer = undefined;
-        tile.remaining = Math.max(0, tile.remaining - (performance.now() - tile.started));
+      } else {
+        cancelAnimationFrame(tile.progressFrame);
+        if (tile.media instanceof HTMLVideoElement) {
+          tile.media.pause();
+        } else if (tile.timer !== undefined) {
+          clearTimeout(tile.timer);
+          tile.timer = undefined;
+          tile.remaining = Math.max(0, tile.remaining - (performance.now() - tile.started));
+        }
+        if (tile.ready) updateProgress(tile);
       }
     }
     onPauseChange?.(paused);
