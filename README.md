@@ -95,3 +95,13 @@ Once running, open the URL printed in the terminal (default: `http://localhost:4
 ## License
 
 MIT
+## Embed the player
+
+Use `src/public/player.mjs` and `src/public/player.css` from the same Git revision.
+Load the stylesheet and call `mountPlayer(element, items, options)`. Give the
+element a height. Each item has a `type` of `image` or `video` and a `url`.
+An item can also supply `fallback(signal)`, an async function that returns a
+compatible URL if playback fails. The player defaults to three columns and
+three rows, a three-second photo duration, and paused playback. The CLI uses
+one row. The optional `onPauseChange` callback can control host-provided audio.
+Call `destroy()` on the returned player when leaving the view.
