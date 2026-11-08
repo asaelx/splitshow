@@ -97,7 +97,9 @@ Once running, open the URL printed in the terminal (default: `http://localhost:4
 MIT
 ## Embed the player
 
-Use `src/public/player.mjs` and `src/public/player.css` from the same Git revision.
+Use `src/public/player.mjs`, `src/public/player.css`, and the playback SVGs
+(`play`, `pause`, `maximize`, and `minimize`) from the same Git revision. Keep
+the SVGs in the `icons/` directory next to the module.
 Load the stylesheet and call `mountPlayer(element, items, options)`. Give the
 element a height. Each item has a `type` of `image` or `video` and a `url`.
 An item can also supply `fallback(signal)`, an async function that returns a

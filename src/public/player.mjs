@@ -30,6 +30,11 @@ export function mountPlayer(root, items, {
   const fullscreen = document.createElement('button');
   play.type = fullscreen.type = 'button';
   play.disabled = !tiles.length;
+  const playIcon = document.createElement('img');
+  const fullscreenIcon = document.createElement('img');
+  playIcon.alt = fullscreenIcon.alt = '';
+  play.append(playIcon);
+  fullscreen.append(fullscreenIcon);
   controls.append(play, fullscreen);
   root.append(controls);
 
@@ -118,7 +123,7 @@ export function mountPlayer(root, items, {
 
   function setPaused(value) {
     paused = value;
-    play.textContent = paused ? 'Play' : 'Pause';
+    setIcon(play, playIcon, paused ? 'play' : 'pause', paused ? 'Play' : 'Pause');
     for (const tile of tiles) {
       if (!paused) {
         resumeTile(tile);
@@ -133,8 +138,16 @@ export function mountPlayer(root, items, {
     onPauseChange?.(paused);
   }
 
+  function setIcon(button, image, name, label) {
+    image.src = new URL(`./icons/${name}.svg`, import.meta.url);
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
   function updateFullscreen() {
-    fullscreen.textContent = document.fullscreenElement === root ? 'Exit fullscreen' : 'Fullscreen';
+    const active = document.fullscreenElement === root;
+    setIcon(fullscreen, fullscreenIcon, active ? 'minimize' : 'maximize',
+      active ? 'Exit fullscreen' : 'Enter fullscreen');
   }
 
   listen(play, 'click', () => setPaused(!paused));
