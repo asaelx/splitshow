@@ -60,7 +60,16 @@ export function mountPlayer(root, items, {
     target.addEventListener(event, callback, { signal: lifecycle.signal });
   }
 
+  function setQueueStatus(tile, message = '') {
+    clearTimeout(tile.statusTimer);
+    tile.status.textContent = message;
+    if (message) {
+      tile.statusTimer = setTimeout(() => setQueueStatus(tile), 2000);
+    }
+  }
+
   function stopTile(tile) {
+    setQueueStatus(tile);
     clearTimeout(tile.timer);
     tile.timer = undefined;
     tile.loading?.abort();
@@ -197,17 +206,21 @@ export function mountPlayer(root, items, {
       if (!item || pending.has(item)) return;
       pending.add(item);
       tile.trash.disabled = true;
-      tile.status.textContent = '';
+      setQueueStatus(tile);
+      const media = tile.media;
       try {
         await onQueueRemoval(item, lifecycle.signal);
         if (lifecycle.signal.aborted) return;
+        const stillShowing = tile.media === media && tile.item === item;
         queued.add(item);
         for (const other of tiles) {
           if (other.item === item) advance(other);
         }
-        tile.status.textContent = 'Queued for review';
+        if (stillShowing) setQueueStatus(tile, 'Queued for review');
       } catch {
-        if (!lifecycle.signal.aborted) tile.status.textContent = 'Could not queue file';
+        if (!lifecycle.signal.aborted && tile.media === media && tile.item === item) {
+          setQueueStatus(tile, 'Could not queue file');
+        }
       } finally {
         pending.delete(item);
         tile.trash.disabled = !tile.item || pending.has(tile.item);
