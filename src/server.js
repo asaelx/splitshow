@@ -1,4 +1,5 @@
 const express = require('express');
+const { createHash } = require('node:crypto');
 const path = require('path');
 const fs = require('fs');
 const net = require('net');
@@ -86,7 +87,43 @@ async function startServer({ mediaDir, imageDuration, preferredPort, musicUrl })
   }
 
   app.get('/api/media', (_req, res) => {
-    res.json({ media: scanMedia(mediaDir), imageDuration, musicId, musicTracks: scanMusic() });
+    res.json({ media: scanMedia(mediaDir), imageDuration, musicId, musicTracks: scanMusic(), queueId });
+  });
+
+  const mediaRoot = fs.realpathSync(mediaDir);
+  const queueId = createHash('sha256').update(mediaRoot).digest('hex');
+  function candidate(req, res, next) {
+    const name = req.params.name;
+    const extension = path.extname(name).toLowerCase();
+    if (!name || name.startsWith('.') || /[/\\\0]/.test(name) ||
+        (!IMAGE_EXTS.has(extension) && !VIDEO_EXTS.has(extension))) {
+      return res.status(400).json({ error: 'Invalid media file.' });
+    }
+    try {
+      const file = path.join(mediaRoot, name);
+      const stat = fs.lstatSync(file, { bigint: true });
+      if (!stat.isFile() || fs.realpathSync(file) !== file) return res.status(404).json({ error: 'Media file unavailable.' });
+      req.candidate = { name, file, identity: [stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':') };
+      next();
+    } catch (error) {
+      res.status(error.code === 'ENOENT' ? 404 : 500).json({ error: 'Media file unavailable.' });
+    }
+  }
+  app.get('/api/deletion-candidates/:name', candidate, (req, res) => {
+    const { name, identity } = req.candidate;
+    res.set('Cache-Control', 'no-store').json({ name, identity });
+  });
+  app.delete('/api/deletion-candidates/:name', express.json({ limit: '1kb' }), candidate, (req, res) => {
+    if (!req.is('application/json')) return res.sendStatus(415);
+    if (req.body?.identity !== req.candidate.identity) {
+      return res.status(409).json({ error: 'File changed since it was queued.' });
+    }
+    try {
+      fs.unlinkSync(req.candidate.file);
+      res.sendStatus(204);
+    } catch {
+      res.status(500).json({ error: 'Could not delete the media file.' });
+    }
   });
 
   app.use('/music', express.static(MUSIC_DIR));

@@ -1,8 +1,10 @@
 export function mountPlayer(root, items, {
-  columns = 3, rows = 3, imageDuration = 3, paused = true, onPauseChange
+  columns = 3, rows = 3, imageDuration = 3, paused = true, onPauseChange, onQueueRemoval
 } = {}) {
   const lifecycle = new AbortController();
   const failed = new Set();
+  const queued = new Set();
+  const pending = new Set();
   const pool = [...items];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -19,8 +21,24 @@ export function mountPlayer(root, items, {
     button.type = 'button';
     button.className = 'splitshow-tile';
     button.setAttribute('aria-label', 'Skip this tile');
-    grid.append(button);
-    return { button, item };
+    const pane = document.createElement('div');
+    pane.className = 'splitshow-pane';
+    pane.append(button);
+    grid.append(pane);
+    const trash = document.createElement('button');
+    trash.type = 'button';
+    trash.className = 'splitshow-trash';
+    trash.setAttribute('aria-label', 'Queue current file for deletion');
+    trash.title = 'Queue for deletion';
+    const icon = document.createElement('img');
+    icon.src = new URL('./icons/trash.svg', import.meta.url);
+    icon.alt = '';
+    trash.append(icon);
+    const status = document.createElement('span');
+    status.className = 'splitshow-queue-status';
+    status.setAttribute('role', 'status');
+    if (onQueueRemoval) pane.append(trash, status);
+    return { button, trash, status, item };
   });
   if (!tiles.length) grid.textContent = 'No playable media found.';
 
@@ -56,7 +74,7 @@ export function mountPlayer(root, items, {
   }
 
   function advance(tile, manual = false) {
-    const available = pool.filter(item => !failed.has(item));
+    const available = pool.filter(item => !failed.has(item) && !queued.has(item));
     const alternatives = available.filter(item => item !== tile.item);
     const unused = alternatives.filter(item => !tiles.some(other => other.item === item));
     const canReplay = available.includes(tile.item);
@@ -81,11 +99,15 @@ export function mountPlayer(root, items, {
     tile.ready = false;
     tile.remaining = imageDuration * 1000;
     tile.button.replaceChildren();
+    tile.trash.disabled = !item || pending.has(item);
     if (!item) {
-      tile.button.textContent = 'No playable media · Retry';
+      const allQueued = pool.every(candidate => queued.has(candidate));
+      tile.button.textContent = allQueued ? 'All files queued for review' : 'No playable media · Retry';
+      tile.button.disabled = allQueued;
       tile.button.setAttribute('aria-label', 'Retry media in this tile');
       return;
     }
+    tile.button.disabled = false;
     tile.button.setAttribute('aria-label', 'Skip this tile');
     const video = item.type === 'video';
     const media = document.createElement(video ? 'video' : 'img');
@@ -167,8 +189,29 @@ export function mountPlayer(root, items, {
 
   for (const tile of tiles) {
     listen(tile.button, 'click', () => {
-      if (!tile.item && failed.size === pool.length) failed.clear();
+      if (!tile.item) failed.clear();
       advance(tile, true);
+    });
+    if (onQueueRemoval) listen(tile.trash, 'click', async () => {
+      const item = tile.item;
+      if (!item || pending.has(item)) return;
+      pending.add(item);
+      tile.trash.disabled = true;
+      tile.status.textContent = '';
+      try {
+        await onQueueRemoval(item, lifecycle.signal);
+        if (lifecycle.signal.aborted) return;
+        queued.add(item);
+        for (const other of tiles) {
+          if (other.item === item) advance(other);
+        }
+        tile.status.textContent = 'Queued for review';
+      } catch {
+        if (!lifecycle.signal.aborted) tile.status.textContent = 'Could not queue file';
+      } finally {
+        pending.delete(item);
+        tile.trash.disabled = !tile.item || pending.has(tile.item);
+      }
     });
     show(tile, tile.item);
   }

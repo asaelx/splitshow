@@ -71,3 +71,48 @@
   outline: 2px solid #99f2da;
   outline-offset: -2px;
 }
+
+.splitshow-pane {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.splitshow-trash {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #ffffff70;
+  border-radius: 8px;
+  background: #101116e8;
+  color: inherit;
+  cursor: pointer;
+}
+
+.splitshow-trash img {
+  width: 20px;
+  height: 20px;
+  filter: invert(1);
+}
+
+.splitshow-trash:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.splitshow-queue-status:not(:empty) {
+  position: absolute;
+  right: 12px;
+  bottom: 58px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: #101116e8;
+  font: 12px system-ui, sans-serif;
+  pointer-events: none;
+}

@@ -93,6 +93,7 @@
     import { mountPlayer } from "./player.mjs";
 
     let isPaused = true;
+    import { setupDeletionReview } from './deletion-review.mjs';
     // ── Background music ──────────────────────────────────────────────────────
 
     let ytPlayer = null;
@@ -175,16 +176,20 @@
     async function init() {
       const res = await fetch('/api/media');
       if (!res.ok) throw new Error('Could not load media.');
-      const { media, imageDuration, musicTracks, musicId } = await res.json();
+      const { media, imageDuration, musicTracks, musicId, queueId } = await res.json();
       if (musicTracks?.length) initLocalMusic(musicTracks);
       else initYouTube(musicId);
 
-      mountPlayer(document.getElementById('stage'), media.map(item => ({
+      const { queue, review, queuedNames } = setupDeletionReview(queueId);
+      const stage = document.getElementById('stage');
+      mountPlayer(stage, media.filter(item => !queuedNames.has(item.name)).map(item => ({
+        name: item.name,
         type: item.type,
         url: `/media/${encodeURIComponent(item.name)}`
       })), {
         rows: 1,
         imageDuration,
+        onQueueRemoval: queue,
         onPauseChange(paused) {
           isPaused = paused;
           if (ytReady) {
@@ -197,6 +202,7 @@
           }
         }
       });
+      stage.querySelector('.splitshow-controls').prepend(review);
     }
 
     init().catch(error => {
